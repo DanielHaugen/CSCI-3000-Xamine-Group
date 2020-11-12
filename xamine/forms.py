@@ -3,7 +3,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import render
 
 from intl_tel_input.widgets import IntlTelInputWidget
-from xamine.models import Patient, Order, Image
+from xamine.models import Patient, Order, Image, Survey
 
 from bootstrap_datepicker_plus import DatePickerInput, DateTimePickerInput
 
@@ -19,7 +19,7 @@ class PatientInfoForm(forms.ModelForm):
     class Meta:
         model = Patient
         fields = [
-            'first_name', 'middle_name', 'last_name', 'email_info', 'birth_date', 'phone_number',
+            'first_name', 'middle_name', 'last_name', 'email_info', 'password', 'birth_date', 'phone_number',
             'allergy_asthma', 'allergy_xraydye', 'allergy_mridye', 'allergy_latex', 'notes'
             ]
 
@@ -28,6 +28,7 @@ class PatientInfoForm(forms.ModelForm):
             'middle_name': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
             'email_info': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+            'password': forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
             'birth_date': DatePickerInput(format='%m/%d/%Y', options={"useCurrent": False},
                                           attrs={'placeholder': 'mm/dd/yyyy'}),
             'phone_number': forms.TextInput(attrs={'class': 'form-control input-phone', 'autocomplete': 'off'}),
@@ -38,6 +39,21 @@ class PatientInfoForm(forms.ModelForm):
             'notes': forms.Textarea(attrs={'class': 'form-control', 'autocomplete': 'off', 'rows': '3'}),
         }
 
+class SurveyForm(forms.ModelForm):
+    """ Handles creation and updating of Patient model """
+
+    class Meta:
+        model = Survey
+        fields = [
+            'visit_rating', 'visit_notes', 'team_rating', 'team_notes'
+            ]
+
+        widgets = {
+            'visit_rating': forms.TextInput(attrs={'min':1,'max': '10','type': 'number'}),
+            'visit_notes': forms.Textarea(attrs={'class': 'form-control', 'autocomplete': 'off', 'rows': '3'}),
+            'team_rating': forms.TextInput(attrs={'min':1,'max': '10','type': 'number'}),
+            'team_notes': forms.Textarea(attrs={'class': 'form-control', 'autocomplete': 'off', 'rows': '3'}),
+        }
 
 class ScheduleForm(forms.ModelForm):
     """ Handles scheduling of Orders """
@@ -114,3 +130,8 @@ class NewOrderForm(forms.ModelForm):
             'modality': forms.Select(attrs={'class': 'form-control'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'autocomplete': 'off', 'rows': '3'}),
         }
+
+class LoginForm(forms.Form):
+    
+    username = forms.CharField(label=(u'Username'), widget=forms.TextInput(attrs={"class":"form-control"}))
+    password = forms.CharField(label=(u'Pasword'), widget=forms.PasswordInput(render_value=False, attrs={"class":"form-control"}))

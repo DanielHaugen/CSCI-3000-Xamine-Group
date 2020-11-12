@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Xamine Order Report</title>
+
+    <!-- Bootstrap -->
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+
+    {% load phone_number %}
+    <style>
+        html { padding-top: 5rem; padding-bottom: 5rem; }
+
+        body { padding: 0; }
+
+        .orderlink { color: black; }
+
+        .label {
+            font-weight: bold;
+        }
+        .text-area-wrap {
+            overflow-wrap: break-word;
+        }
+
+        .little-pad {
+            padding: 0;
+            margin: 0;
+        }
+
+        .section-header {
+            margin-bottom: 0;
+        }
+        .left_indent {
+            padding-left: 100px;
+            margin-left: 100px;
+        }
+        
+        img{
+            max-width:450px;
+            max-height:450px;
+        }
+    </style>
+  </head>
+  <body>
+    {% block main %}
+    {% load group_auth %}
+
+    <!-- patient info section -->
+    <div class="collapse show" id="patient_info">
+        <div class="container mt-1">
+            <div class="row">
+                <div class="col-12 mb-2">
+                    <h1>Patient: {{ user.first_name }} {{ user.last_name }}</h1>
+                    <h2 class="little-pad">Appointment: {{ cur_order.appointment|default_if_none:cur_order.added_on  }}</h2>
+                    <h6 class="little-pad">Status: {{ cur_order.level.name  }}</h6>
+                    {% if cur_order.team %}
+                        <div class='text-muted small'>Team: {{ cur_order.team }}</div>
+                    {% endif %}
+                    <hr>
+                </div>
+                <div class="col-12">
+                    <h2>Patient Information</h2>
+                </div>
+
+            </div>
+            <div class="row">
+                <div class="col-12">
+                    <div class="row mt-3">
+                        <div class="col-md-4 col-12">
+                            <span class="label">First Name:</span>
+                            {{ cur_order.patient.first_name }}
+                        </div>
+                        <div class="col-md-4 col-12">
+                            <span class="label">Middle Name:</span>
+                            {{ cur_order.patient.middle_name|default_if_none:'' }}
+                        </div>
+                        <div class="col-md-4 col-12">
+                            <span class="label">Last Name:</span>
+                            {{ cur_order.patient.last_name }}
+                        </div>
+                    </div>
+                    <div class="row mt-1">
+                        <div class="col-md-4 col-12">
+                            <span class="label">Date of Birth:</span>
+                            {{ cur_order.patient.birth_date }}
+                        </div>
+                        <div class="col-md-4 col-12">
+                            <span class="label">Phone Number:</span>
+                            {{ cur_order.patient.phone_number|phone_number }}
+                        </div>
+                        <div class="col-md-4 col-12">
+                            <span class="label">Email Address:</span>
+                            {{ cur_order.patient.email_info }}
+                        </div>
+                    </div>
+                    {% if show_medical %}
+                        <div class="row mt-1">
+                            <div class="col-12">
+                                <hr>
+                            </div>
+                            <div class="col-md-4 col-12">
+                                <span class="font-weight-bold">X-Ray Dye Allergy:</span><br>
+                                {{ cur_order.patient.allergy_xraydye|yesno:"Yes,No" }}
+                            </div>
+                            <div class="col-md-4 col-12">
+                                <span class="font-weight-bold">MRI Dye Allergy:</span><br>
+                                {{ cur_order.patient.allergy_mridye|yesno:"Yes,No" }}
+                            </div>
+                            <div class="col-md-4 col-12">
+                                <span class="font-weight-bold">Latex Allergy:</span><br>
+                                {{ cur_order.patient.allergy_latex|yesno:"Yes,No" }}
+                            </div>
+                            <div class="col-md-4 col-12">
+                                <span class="font-weight-bold">Asthma:</span><br>
+                                {{ cur_order.patient.allergy_asthma|yesno:"Yes,No" }}
+                            </div>
+                            <div class="col-md-8 col-12 text-area-wrap">
+                                <span class="font-weight-bold">Notes:</span><br>
+                                {{ cur_order.patient.notes }}
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- end physician section -->
+
+    <!-- order info section -->
+    <div class="collapse show" id="order_info">
+        <div class="container mt-5">
+            <div class="row">
+                <div class="col-12">
+                    <h2 class="section-header">Order Information</h2>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-4 col-12">
+                    <span class="label">Reason for Visit:</span><br>
+                    <span class="left_indent">{{ cur_order.visit_reason }}</span>
+                </div>
+                <div class="col-md-4 col-12">
+                    <span class="label">Imaging Needed:</span><br>
+                    {{ cur_order.imaging_needed }}
+                </div>
+                <div class="col-md-4 col-12">
+                    <span class="label">Modality:</span><br>
+                    {{ cur_order.modality }}
+                </div>
+                <div class="col-12 text-area-wrap">
+                    <span class="label">Order Notes:</span><br>
+                    {{ cur_order.notes }}
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- end order section -->
+
+    {% if cur_order.level_id > 1 %}
+        <div class="collapse show" id="imaging_info">
+            <div class="container mt-5">
+                <div class="row">
+                    <div class="col-12">
+                        <h2 class="section-header">Imaging</h2>
+                        {% if cur_order.imaged %}
+                            <div class="text-muted small mt-2">
+                                Imaging completed by <strong>{{ cur_order.imaged }}</strong> at {{ cur_order.imaged_time }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    {% for image in thumbnails %}
+                        <div class="col-md-4 col-12">
+                            <a href="{{ image.image.url }}" target="_blank">
+                                <img class="img-fluid img-thumbnail" src="{{ url }}{{ image.image.url }}" height="300px" alt="{{ image.label }}"/>
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <!-- end imaging section -->
+    {% endif %}
+
+    {% if cur_order.level_id > 2 %}
+        <!-- analysis section -->
+        <div class="collapse show" id="order_info">
+            <div class="container mt-5">
+                <div class="row">
+                    <div class="col-12">
+                        <h2>Analysis Report</h2>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12 mt-2">
+                        {% if analysis_form %}
+                            <form method="POST">
+                                {% csrf_token %}
+                                {{ analysis_form.report }}
+                                <button type="submit" class="mt-2 btn btn-success">Submit Report</button>
+                                <button type="submit" formaction="{% url 'save_order' order_id=cur_order.id %}" class="mt-2 btn btn-outline-primary">
+                                    <i class="fas fa-save"></i>&nbsp;&nbsp;Save Report
+                                </button>
+                            </form>
+                        {% else %}
+                            <div class='text-muted small mt-2 mb-4'>
+                                Completed by <strong>{{ cur_order.completed }}</strong> on {{ cur_order.completed_time }}
+                            </div>
+                            <div class="text-area-wrap">
+                                {{ cur_order.report }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- end analysis section -->
+    {% endif %}
+
+{% endblock %}
+
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="js/bootstrap.min.js"></script>
+  </body>
+</html>

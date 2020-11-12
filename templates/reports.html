@@ -1,0 +1,184 @@
+{% extends 'base/base.html' %}
+
+{% block header %}
+    {% load group_auth %}
+    <style>
+        
+        .orderlink { color: black; }
+
+        .label {
+            font-weight: bold;
+        }
+
+        /* Chrome, Safari, Edge, Opera */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+        }
+
+        /* Firefox */
+        input[type=number] {
+        -moz-appearance: textfield;
+        }
+
+    </style>
+
+    {{ patient_lookup.media.css }}
+    <link href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" type="text/css" rel="stylesheet">
+{% endblock %}
+
+{% block main %}
+{% load rem_plural %}
+{% load sum_week %}
+{% load timed_in %}
+{% load get_patient_count %}
+{% load get_feedback %}
+{% load date_str %}
+
+<div class="container mt-1">
+    <div class="row mt-3">
+        <div class="col-12 text-center">
+            <div class="mb-3 h5">Current Week - Week of {{ cur_week }}</div>
+            <table id="current_table" class="table table-sm table-hover">
+                <thead>
+                <tr>
+                    <th data-field="first_name">First Name</th>
+                    <th>Last Name</th>
+                    <th>Position</th>
+                    <th>Weekly Hours</th>
+                    <th style="width:15%">Weekly Report</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for staff in faculty %}
+                    <tr data-toggle="collapse" data-target="#accordion_{{ forloop.counter0 }}" class="clickable" style="cursor: pointer;">
+                        <td>{{ staff.first_name }}</td>
+                        <td>{{ staff.last_name }}</td>
+                        <td>{{ staff.groups.all.0|rem_plural }}</td>
+                        <td>{% sum_week staff %}</td>
+                        <td>
+                            <a href="{% url 'download_report' staff.id cur_week|date_str %}" class="btn btn-sm btn-primary" role="button">
+                                <i class="fas fa-fw fa-download"></i> Excel Report
+                            </a>
+                        </td>
+                    </tr>
+                    {% timed_in staff as staff_week %}
+                    <tr class="table-borderless">
+                        <td colspan="5" style="padding: 0%;">
+                            <div id="accordion_{{ forloop.counter0 }}" class="collapse">
+                                <div class="col-12 mb-3">
+                                    <div class="row mt-1">
+                                        <div class="col-md-4 col-12">
+                                            <span class="font-weight-bold">Username</span><br>
+                                            {{ staff }}
+                                        </div>
+                                        <div class="col-md-4 col-12">
+                                            <span class="font-weight-bold">Weekly Patient Count</span><br>
+                                            {% get_patient_count staff %}
+                                        </div>
+                                        <div class="col-md-4 col-12">
+                                            <span class="font-weight-bold">Email Address</span><br>
+                                            {{ staff.email }}
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-md-4 col-12">
+                                            <span class="font-weight-bold">Last Login</span><br>
+                                            {{ staff.last_login }}
+                                        </div>
+                                        <div class="col-md-4 col-12">
+                                            <span class="font-weight-bold">Patient Feedback</span><br>
+                                            {% get_feedback staff %}
+                                        </div>
+                                        <div class="col-md-4 col-12">
+                                            <span class="font-weight-bold">Timesheet Submitted</span><br>
+                                            {% if staff_week %}
+                                                True
+                                            {% else %}
+                                                False
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">
+                            No timehseet records
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-12 text-center">
+            <div class="mb-3 h5">Previous Weeks</div>
+            <table class="table table-sm  table-hover">
+                <thead>
+                <tr>
+                    <th style="width:33.33%" data-sortable="true">Week of</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for week in prev_weeks %}
+                    <tr data-toggle="collapse" data-target="#accordion_prev_{{forloop.counter}}" class="clickable" style="cursor: pointer;">
+                        <td class="d-md-table-cell label">{{ week }}</td>
+                    </tr>
+                    {% for staff in faculty %}
+                        <tr class="table-borderless">
+                            <td colspan="5" style="padding: 0%;">
+                                <div id="accordion_prev_{{forloop.parentloop.counter}}" class="collapse py-1">
+                                        <div class="row mt-1">
+                                            <div class="col">
+                                                {{ staff.first_name }}
+                                            </div>
+                                            <div class="col">
+                                                {{ staff.last_name }}
+                                            </div>
+                                            <div class="col">
+                                                {{ staff.groups.all.0|rem_plural }}
+                                            </div>
+                                            <div class="col">
+                                                {% sum_week staff week_of=week %}
+                                            </div>
+                                            <div class="col">
+                                                <a href="{% url 'download_report' staff.id week|date_str %}" class="btn btn-sm btn-primary" role="button">
+                                                    <i class="fas fa-fw fa-download"></i> Excel Report
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">
+                            No timehseet records
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p id="test"></p>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block afterscript %}
+
+    {{ patient_lookup.media.js}}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap-notify@3.1.3/bootstrap-notify.min.js"></script>
+    <script>
+        
+    </script>
+{% endblock %}

@@ -10,7 +10,10 @@ from xamine.models import Order, AppSetting
 def send_email(to_email, from_email, subject, html_content):
     """ Defines how to send generic email"""
 
-    if AppSetting.get_setting("EMAIL_TOGGLE") != 'True':
+    try:
+        if not AppSetting.get_setting("EMAIL_TOGGLE"):
+            pass
+    except AppSetting.DoesNotExist:
         return
 
     if isinstance(to_email, str):
@@ -31,6 +34,11 @@ def send_email(to_email, from_email, subject, html_content):
 @background(schedule=5)
 def send_notification(order_id):
     """ Send notification to correct group of users """
+    try:
+        if not AppSetting.get_setting("EMAIL_TOGGLE"):
+            return
+    except AppSetting.DoesNotExist:
+        return
 
     # Grab correct order via order_id and set our from address
     ord = Order.objects.get(pk=order_id)

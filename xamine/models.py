@@ -1,4 +1,5 @@
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, AbstractBaseUser
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.utils import timezone
 from django.db.models.signals import pre_delete
@@ -29,16 +30,23 @@ class AppSetting(models.Model):
         return self.name
 
 
-class Patient(models.Model):
+class Patient(AbstractBaseUser, models.Model):
     """ Model to track the patient and their history """
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, related_name='user_obj')
+    username = None
 
     # Personal information
     first_name = models.CharField(max_length=128)
     middle_name = models.CharField(max_length=128, blank=True, null=True)
     last_name = models.CharField(max_length=128)
-    email_info = models.EmailField()
+    email_info = models.EmailField(unique=True)
+    password = models.CharField(max_length=128)
     birth_date = models.DateField(validators=[check_past_date])
     phone_number = models.CharField(max_length=32)
+
+    USERNAME_FIELD = 'email_info'
+    REQUIRED_FIELDS = []
 
     # Medical information
     allergy_asthma = models.BooleanField()
@@ -90,9 +98,13 @@ class Team(models.Model):
 class Order(models.Model):
     """ Model for each individual imaging order placed by doctors """
 
+    # Receptionist Logged
+    receptionist = models.ForeignKey(User, on_delete=models.DO_NOTHING, null=True)
+
     # Patient Info
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="orders")
     appointment = models.DateTimeField(null=True, blank=True,)
+    survey = models.ForeignKey('Survey', on_delete=models.SET_NULL, null=True, blank=True, related_name='order_survey')
     team = models.ForeignKey(Team, on_delete=models.SET_NULL, null=True, blank=False, related_name='orders')
 
     # Automatically record timestamp info
@@ -162,3 +174,30 @@ def mymodel_delete(sender, instance, **kwargs):
 
     if instance.image:
         instance.image.delete(False)
+
+class Survey(models.Model):
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, null=True, related_name='survey_order')
+    completed_time = models.DateTimeField(null=True, blank=True)
+    
+    visit_rating = models.IntegerField(validators=[MaxValueValidator(10),MinValueValidator(1)])
+    visit_notes = models.CharField(max_length=1000, null=True, blank=True)
+    
+    team_rating = models.IntegerField(validators=[MaxValueValidator(10),MinValueValidator(1)])
+    team_notes = models.CharField(max_length=1000, null=True, blank=True)
+
+class WeeklyHours(models.Model):
+    # employee_id = models.OneToOneField(Order, on_delete=models.CASCADE, null=True, related_name='survey_order')
+    employee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='employee')
+    week_of = models.DateField(null=True, blank=True)
+    patient_count = models.IntegerField(default=0, validators=[MaxValueValidator(255),MinValueValidator(0)])
+
+class TimeCategory(models.Model):
+    week = models.ForeignKey(WeeklyHours, on_delete=models.CASCADE, related_name='week')
+    name = models.CharField(max_length=30)
+    mon_hours = models.DecimalField(max_digits = 4, decimal_places = 2, validators=[MaxValueValidator(24),MinValueValidator(0)])
+    tues_hours = models.DecimalField(max_digits = 4, decimal_places = 2, validators=[MaxValueValidator(24),MinValueValidator(0)])
+    wed_hours = models.DecimalField(max_digits = 4, decimal_places = 2, validators=[MaxValueValidator(24),MinValueValidator(0)])
+    thur_hours = models.DecimalField(max_digits = 4, decimal_places = 2, validators=[MaxValueValidator(24),MinValueValidator(0)])
+    fri_hours = models.DecimalField(max_digits = 4, decimal_places = 2, validators=[MaxValueValidator(24),MinValueValidator(0)])
+    sat_hours = models.DecimalField(max_digits = 4, decimal_places = 2, validators=[MaxValueValidator(24),MinValueValidator(0)])
+    sun_hours = models.DecimalField(max_digits = 4, decimal_places = 2, validators=[MaxValueValidator(24),MinValueValidator(0)])

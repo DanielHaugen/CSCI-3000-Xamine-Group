@@ -1,13 +1,15 @@
 from django.conf import settings
 from django.shortcuts import render
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMessage, BadHeaderError
 from django.urls import reverse
+from django.template.loader import render_to_string
+from django.http import HttpResponse, HttpResponseRedirect
 
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework import status
 
-from xamine.models import OrderKey, AppSetting
+from xamine.models import OrderKey, AppSetting, Order
 import random
 import string
 
@@ -23,26 +25,43 @@ def patient_email(request, order_id):
 
     # attempt to send email
     try:
-        # Either create or update the key for this order
-        current_key = OrderKey.objects.get_or_create(order_id=order_id)[0]
-
-        # Grab a new random string for our key
-        key = random_string()
-
-        # Assign new key to the OrderKey and save
-        current_key.secret_key = key
-        current_key.save()
+        # Attempt to grab order via order_id from url. 404 if not found.
+        try:
+            cur_order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            return_data = {
+                'status': 'fail',
+                'message': f'Email not sent! Order does not exist',
+            }
+            return Response(return_data, status=status.HTTP_400_BAD_REQUEST)
 
         # Establish our URL and recipient, the patient's email
-        url = f"https://{host}{reverse('public_order')}?key={key}"
-        to_email = current_key.order.patient.email_info
+        url = f"{request.build_absolute_uri('/')}patient-login/"
+        to_email = cur_order.patient.email_info
 
         # Set up our message content
         html_content = "Imaging report has been emailed to you: <br><br>" + url
 
         if AppSetting.get_setting('EMAIL_TOGGLE') == 'True':
             # Send patient our email
-            send_email([to_email], 'xamineinc@gmail.com', 'RIS Report is Ready', html_content)
+            from_email = 'xamine-team3@daniel-haugen.com'
+            subject = 'Xamine RIS - Records Update'
+            patient_dict = {
+                'first_name': cur_order.patient.first_name,
+                'url': url
+            }
+            cc_list = ['dlhaugen1039@gmail.com']
+            html_message = render_to_string(
+                template_name = 'mail_templates/email_message.html',
+                context = patient_dict
+            )
+            try:
+                msg = EmailMessage(subject=subject, body=html_message, from_email=from_email, to=[to_email], cc=cc_list)
+                msg.content_subtype = "html"
+                msg.send()
+            except BadHeaderError:
+                return HttpResponse('Invalid header found.')
+            #send_email([to_email], 'xamineinc@gmail.com', 'RIS Report is Ready', html_content)
             message = 'Email Sent!'
         else:
             message = 'Link created!'
@@ -58,7 +77,7 @@ def patient_email(request, order_id):
         # Return JSON to express failure
         return_data = {
             'status': 'fail',
-            'message': f'Email not sent!',
+            'message': f'Email not sent!{to_email}',
         }
         return Response(return_data, status=status.HTTP_400_BAD_REQUEST)
 

@@ -149,13 +149,14 @@ CRISPY_TEMPLATE_PACK = 'bootstrap4'
 
 # Email settings
 
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "smtp.gmail.com"
+DEFAULT_FROM_EMAIL = 'xamine.team3@gmail.com'
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.sendgrid.net'
+EMAIL_HOST_USER = 'apikey'
+EMAIL_HOST_PASSWORD = '[REDACTED]'
+EMAIL_PPORT = 587
 EMAIL_USE_TLS = True
-EMAIL_USE_SSL = False
-EMAIL_PORT = 587
-EMAIL_HOST_USER = "xamineinc@gmail.com"
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASS')
+#EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASS')
 
 # Check prodsettings.py to see how to enable emails
 

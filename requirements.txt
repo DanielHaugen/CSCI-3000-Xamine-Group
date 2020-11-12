@@ -12,3 +12,6 @@ django-background-tasks
 django-extensions
 sendgrid
 django-cleanup
+xhtml2pdf
+requests
+XlsxWriter

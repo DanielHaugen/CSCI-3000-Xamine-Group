@@ -4,6 +4,30 @@
     {% load group_auth %}
     <style>
         .orderlink { color: black; }
+
+        label {
+            font-weight: bold;
+        }
+
+        .mask-container {
+            background: url(https://cdn.pixabay.com/photo/2020/02/16/20/29/nyc-4854718_1280.jpg) center/cover;
+            padding-top: 4rem;
+            padding-bottom: 25rem;
+            -webkit-mask:
+                radial-gradient(var(--r1,160%) var(--r2,68.15%) at top   ,white 79.5%,transparent 80%) top left,
+                radial-gradient(var(--r1,160%) var(--r2,68.15%) at bottom,transparent 79.5%,white 80%) top center,
+                radial-gradient(var(--r1,160%) var(--r2,68.15%) at top   ,white 79.5%,transparent 80%) top right;
+            mask:
+                radial-gradient(var(--r1,160%) var(--r2,68.15%) at top   ,white 79.5%,transparent 80%) top left,
+                radial-gradient(var(--r1,160%) var(--r2,68.15%) at bottom,transparent 79.5%,white 80%) top center,
+                radial-gradient(var(--r1,160%) var(--r2,68.15%) at top   ,white 79.5%,transparent 80%) top right;
+            -webkit-mask-size:33.4% 150%; 
+            -webkit-mask-repeat:no-repeat;
+            mask-size:33.4% 140%;
+            mask-repeat:no-repeat;
+            margin-top: -2rem;
+            margin-bottom: -2rem;
+        }
     </style>
 
     {{ patient_lookup.media.css }}
@@ -274,14 +298,219 @@
         <!-- end analysis section -->
     {% endif %}
 
+    {% if request.user|has_group:"Patient" %}
+        <!-- patient section -->
+        <form id="modal-form" method="POST" action="{% url 'submit_survey' order_id=order_id %}">
+            {% csrf_token %}
+            <div class="modal fade" id="newSurveyModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="exampleModalLabel">Provide Feedback on your Visit</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-4">
+                                <label>Please rate the level of care and attention you recieved from
+                                    the employees that helped you during your visit: (On a scale from 1 to 10)</label><br>
+                                {{ new_survey_form.team_rating }}
+                            </div>
+                            <div class="mb-4">
+                                <label>Do you have thoughts or feedback on the employees that helped you during your visit?</label><br>
+                                {{ new_survey_form.team_notes }}
+                            </div>
+                            <div class="mb-4">
+                                <label>Please rate your overall visit on a scale from 1 to 10:</label><br>
+                                {{ new_survey_form.visit_rating }}
+                            </div>
+                            <div class="mb-4">
+                                <label>Is there any additional feedback you would like to share regarding your visit?</label><br>
+                                {{ new_survey_form.visit_notes }}
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                            <button type="submit" class="btn btn-primary">Submit Feedback</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+        <section class="mask-container">
+            <div class="container">
+              <div class="row">
+                <div class="col-md-6 col-xs-12">
+                    <h1 class="mb-3">Welcome {{user.first_name}}</h1>
+                    <h5>Thanks for visiting Xamine RIS, </h5>
+                    <h5 class="mb-3">the #1 nonexistent RIS in the world!</h5>
+                    <a class="btn btn-primary" href="#patient_section" role="button">See Visits</a>
+                </div>
+              </div>
+            </div>
+        </section>
+        <div id="patient_section">
+            <div class="container mt-1">
+                <div class="row">
+                    <div class="col-12">
+                        <span class="display-4">
+                            Most Recent Visit
+                        </span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12 col-12">
+                        <div class="row collapse show patient-info">
+                            <div class="col-md-12 col-12 mt-3">
+                                <label>Appointment Date: </label>
+                                {{ complete_orders.0.appointment|default_if_none:complete_orders.0.added_on }}
+                            </div>
+                            <div class="col-md-12 col-12 mt-1">
+                                <label>Appointment Type:</label>
+                                {{ complete_orders.0.modality }}
+                            </div>
+                            <div class="col-md-12 col-12 mt-1">
+                                <label>Processing Finalized:</label>
+                                {{ complete_orders.0.completed_time }}
+                            </div>
+                            <div class="col-md-2 col-12 mt-1">
+                                <a class="btn btn-success" href="{% url 'order' order_id=complete_orders.0.id %}" role="button">
+                                    <i class="fas fa-fw fa-calendar-alt"></i> View Details
+                                </a>
+                            </div>
+                            <div class="col-md-3 col-12 mt-1">
+                                {% if complete_orders.0.survey == None %}
+                                    <button type="button" id="{{ complete_orders.0.pk }}" class="btn btn-primary survey-btn" data-toggle="modal" data-target="#newSurveyModal">
+                                        <i class="fas fa-fw fa-comment"></i> Give Feedback on Visit
+                                    </button>
+                                {% else %}
+                                    <button type="button" class="btn btn-secondary">
+                                        <i class="fas fa-fw fa-comment"></i> Feedback Recieved
+                                    </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-5">
+                    <div class="col-12 mb-2">
+                        <span class="display-4">
+                            Previous Visits
+                        </span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12 col-md-12 text-center">
+                        <table class="table table-md">
+                            <thead>
+                            <tr>
+                                <th>Appointment Date</th>
+                                <th>Appointment Type</th>
+                                <th>Processing Finalized</th>
+                                <th>Provide Feedback on your Visit</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for order in complete_orders %}
+                                <tr>
+                                    
+                                    <td><a class="orderlink" href="{% url 'order' order_id=order.id %}">{{ order.added_on|date:'m/d/Y' }}</a></td>
+                                    <td><a class="orderlink" href="{% url 'order' order_id=order.id %}">{{ order.modality }}</a></td>
+                                    <td><a class="orderlink" href="{% url 'order' order_id=order.id %}">{{ order.completed_time }}</a></td>
+                                    <td>
+                                        {% if order.survey == None %}
+                                            <button type="button" id="{{ order.id }}" class="btn btn-primary survey-btn" data-toggle="modal" data-target="#newSurveyModal">
+                                                <i class="fas fa-fw fa-comment"></i> Provide Feedback
+                                            </button>
+                                        {% else %}
+                                            <button type="button" class="btn btn-secondary">
+                                                <i class="fas fa-fw fa-comment"></i> Feedback Provided
+                                            </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted">
+                                        No orders
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Footer -->
+        <footer class="page-footer font-small pt-4 mt-5">
+        
+            <!-- Copyright -->
+            <div id="test" class="footer-copyright text-center pb-3 text-secondary" style="margin-bottom: -5rem;">
+                <label>Fall 2020 | Xamine Team3</label>
+            </div>
+            <!-- Copyright -->
+        
+        </footer>
+        <!-- Footer -->
+        <!-- end patient section -->
+    {% endif %}
+
 {% endblock %}
 
 {% block afterscript %}
 
     {{ patient_lookup.media.js}}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap-notify@3.1.3/bootstrap-notify.min.js"></script>
     <script>
         $('#datepicker').datepicker({
             uiLibrary: 'bootstrap4'
+        });
+        
+        const showModal = '{{ show_modal }}';
+        if (showModal === 'True') {
+            $('#newSurveyModal').modal('show');
+        }
+
+        const just_submitted = '{{ request.session.just_submitted }}'
+        if (just_submitted > 0) {
+            $.notify({
+                title: '<strong>Feedback Submitted!</strong>',
+                message: 'Thank you for submitting your feedback, Xamine RIS strives to do our best to accomodate your needs!'
+            },{
+                type: 'success',
+                offset: {
+                    x: 50,
+                    y: 75
+                }
+            });
+        }
+
+        $(document).ready(function() {
+            $(".survey-btn").click(function(){
+                var orderId = $(this).attr('id');
+                $('#modal-form').attr('action', "/survey/" + orderId + "/save");
+            });
+        });
+
+        $(document).on('click', '.survey-btn', function() { 
+            var orderId = $(this).attr('id');
+            $('#modal-form').attr('action', "/survey/" + orderId + "/save");
+        });
+
+        $(document).on('click', '#test', function() { 
+            $.notify({
+                title: '<strong>Feedback Submitted!</strong>',
+                message: 'Thank you for submitting your feedback, Xamine RIS strives to do our best to accomodate your needs!'
+            },{
+                type: 'success',
+                offset: {
+                    x: 50,
+                    y: 75
+                }
+            });
         });
     </script>
 {% endblock %}

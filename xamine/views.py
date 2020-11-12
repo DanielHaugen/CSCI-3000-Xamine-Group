@@ -1,17 +1,326 @@
 import datetime
+from datetime import datetime as dt
 
-from django.contrib.auth.decorators import login_required
-from django.http import Http404
+from django.contrib.auth.models import User, Group
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth import authenticate, login
+from django.http import Http404, HttpResponseRedirect, HttpResponseNotAllowed, HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.template.loader import get_template
 from django.utils import timezone
+from django.views import View
+from xhtml2pdf import pisa
+from io import BytesIO
+import requests
+import json
+import time
 
-from xamine.models import Order, Patient, Image, OrderKey
-from xamine.forms import ImageUploadForm
+from xamine.models import Order, Patient, Image, OrderKey, TimeCategory, WeeklyHours, User, Survey
+from xamine.forms import ImageUploadForm, LoginForm
 from xamine.forms import NewOrderForm, PatientLookupForm
-from xamine.forms import PatientInfoForm, ScheduleForm, TeamSelectionForm, AnalysisForm
+from xamine.forms import PatientInfoForm, ScheduleForm, TeamSelectionForm, AnalysisForm, SurveyForm
 from xamine.utils import is_in_group, get_image_files
 from xamine.tasks import send_notification
+from xamine.excel_utils import generate_excel
 
+def loginPatient(request):
+    # Logging into the patient portal page
+    if request.user.is_authenticated:
+        return HttpResponseRedirect('/')
+
+    if request.method == 'POST':
+        form = LoginForm(request.POST)
+        context = {'form':form}
+
+        captcha_token = request.POST.get("g-recaptcha-response")
+        captcha_url = "https://www.google.com/recaptcha/api/siteverify"
+        captcha_secret = "[REDACTED]"
+
+        captcha_data = {"secret":captcha_secret, "response":captcha_token}
+        captcha_server_resp = requests.post(url=captcha_url, data=captcha_data)
+        captcha_json = json.loads(captcha_server_resp.text)
+        if not captcha_json['success']:
+            context['incorrect_captcha'] = True
+            return render(request, 'patients/login.html', context)
+
+        if form.is_valid():
+            username = form.cleaned_data['username']
+            password = form.cleaned_data['password']
+            account = authenticate(username=username, password=password)
+
+            if account is not None:
+                login(request, account)
+                return redirect('index')
+            else:
+                context['incorrect'] = True
+                return render(request, 'patients/login.html', context)
+        else:
+            context['incorrect'] = True
+            return render(request, 'patients/login.html', context)
+    else:
+        form = LoginForm()
+        context = {'form':form}
+        return render(request, 'patients/login.html', context)
+
+@login_required
+def order_survey(request, order_id):
+
+    # if post request, redirect to 404
+    if request.method == 'POST':
+        raise Http404
+
+    # Attempt to grab order via order_id from url. 404 if not found.
+    try:
+        cur_order = Order.objects.get(pk=order_id)
+    except Order.DoesNotExist:
+        raise Http404
+
+    if not is_in_group(request.user, "Patient"):
+        return Http404
+    
+    return redirect('submit_survey', order_id=order_id)
+
+@login_required
+def submit_survey(request, order_id):
+    """ Handles creation of a new Survey """
+
+    # set up new patient request form with POST data
+    new_form = SurveyForm(data=request.POST)
+
+    # Attempt to grab order via order_id from url. 404 if not found.
+    try:
+        cur_order = Order.objects.get(pk=order_id)
+    except Order.DoesNotExist:
+        raise Http404
+
+    # Ensure only patients can submit surveys, and that they can only submit surveys on their own orders
+    if not is_in_group(request.user, "Patient") or cur_order.patient.pk != request.user.user_obj.pk:
+        return Http404
+
+    # Check if form is valid. If so, assign doctor and save, the redir to a new order. Otherwise, show error.
+    if new_form.is_valid():
+        new_survey = new_form.save()
+        
+        cur_order = Order.objects.get(pk=order_id)
+
+        new_survey.order = cur_order
+        new_survey.completed_time = timezone.now()
+        new_survey.save()
+        
+        cur_order.survey = new_survey
+        cur_order.save()
+
+        request.session['just_submitted'] = 0
+        return redirect('index')
+
+    else:
+        # Grab active orders and completed orders from database
+        active_orders = Order.objects.filter(level_id__lt=4)
+        complete_orders = Order.objects.filter(level_id=4)
+
+
+        active_orders = active_orders.filter(patient=request.user.user_obj)
+        complete_orders = complete_orders.filter(patient=request.user.user_obj)
+
+        context = {
+            'new_survey_form': new_form,
+            'order_id': order_id,
+            'show_modal': True,
+            'active_orders': active_orders,
+            'complete_orders': complete_orders,
+        }
+        return render(request, 'index.html', context)
+
+def render_to_pdf(request, order_id):
+    # Attempt to grab order via order_id from url. 404 if not found.
+    try:
+        cur_order = Order.objects.get(pk=order_id)
+    except Order.DoesNotExist:
+        raise Http404
+
+    # Ensure only patients can submit surveys, and that they can only submit surveys on their own orders
+    if not is_in_group(request.user, "Patient") or cur_order.patient.pk != request.user.user_obj.pk:
+        return Http404
+    
+    # Define which user groups can see medical info, add to context
+    medical_groups = ['Technicians', 'Radiologists', 'Physicians']
+    context = {
+        'cur_order': cur_order,
+        'user': request.user,
+        'url': request.build_absolute_uri('/')[:-1],
+        'show_medical': is_in_group(request.user, medical_groups)
+    }
+
+    # Send thumbnails into context and render HTML
+    context['thumbnails'] = get_image_files(cur_order.images.all())
+
+    template = get_template('pdf_temp.html')
+    html  = template.render(context)
+    result = BytesIO()
+    pdf = pisa.pisaDocument(BytesIO(html.encode("ISO-8859-1")), result)
+    if not pdf.err:
+        return HttpResponse(result.getvalue(), content_type='application/pdf')
+    return None
+
+#Opens up page as PDF
+@login_required
+def view_pdf(request, order_id):
+    # Attempt to grab order via order_id from url. 404 if not found.
+    try:
+        cur_order = Order.objects.get(pk=order_id)
+    except Order.DoesNotExist:
+        raise Http404
+
+    pdf = render_to_pdf(request, order_id)
+    return HttpResponse(pdf, content_type='application/pdf')
+
+#Automaticly downloads to PDF file
+@login_required
+def download_pdf(request, order_id):
+    # Attempt to grab order via order_id from url. 404 if not found.
+    try:
+        cur_order = Order.objects.get(pk=order_id)
+    except Order.DoesNotExist:
+        raise Http404
+
+    pdf = render_to_pdf(request, order_id)
+
+    response = HttpResponse(pdf, content_type='application/pdf')
+    tmp_string = cur_order.appointment
+    filename = "Xamine Appointment.pdf"
+    content = "attachment; filename=%s" %(filename)
+    response['Content-Disposition'] = content
+    return response
+
+@login_required
+def timesheet(request):
+    # Prevent patients from accessing timesheet application
+    if is_in_group(request.user, "Patient"):
+        return Http404
+
+    if request.is_ajax():
+        values = dict(request.POST)
+        returnJson = {}
+        if 'time' in values:
+            values = request.POST.get('time')
+            if values:
+                values = json.loads(values)
+            
+            if values == {}:
+                return JsonResponse({
+                        'msg': 'Error',
+                        'error_msg': 'You must specify your hours before submitting.'
+                    })
+
+            # Most recent monday value
+            monday = datetime.date.today() + datetime.timedelta(days=-datetime.date.today().weekday())
+            cur_week, created = WeeklyHours.objects.get_or_create(employee=request.user, week_of=monday)
+
+            for key, value in values.items():
+                TimeCategory.objects.update_or_create(
+                    defaults={'mon_hours':value[0], 
+                    'tues_hours':value[1], 'wed_hours':value[2],
+                    'thur_hours':value[3], 'fri_hours':value[4], 
+                    'sat_hours':value[5], 'sun_hours':value[6]},
+                    week=cur_week, name=key
+                    )
+            
+        elif 'copy' in values:
+            if values['copy'][0] == '1':
+                # Most recent monday value
+                monday = datetime.date.today() + datetime.timedelta(days=-datetime.date.today().weekday(), weeks=-1)
+                try:
+                    returnJson = list(WeeklyHours.objects.get(employee=request.user, week_of=monday).week.all().values('name',
+                        'mon_hours','tues_hours','wed_hours','thur_hours','fri_hours','sat_hours','sun_hours'))
+                except WeeklyHours.DoesNotExist:
+                    return JsonResponse({
+                        'msg': 'Error',
+                        'error_msg': 'No timesheet records were found for last week.'
+                    })
+
+        elif 'offset' in values:
+            offset = int(values['offset'][0])
+            monday = datetime.date.today() + datetime.timedelta(days=-datetime.date.today().weekday(), weeks=offset)
+            try:
+                returnJson = list(WeeklyHours.objects.get(employee=request.user, week_of=monday).week.all().values('name',
+                    'mon_hours','tues_hours','wed_hours','thur_hours','fri_hours','sat_hours','sun_hours'))
+            except WeeklyHours.DoesNotExist:
+                returnJson = ['DNE']
+                values['return'] = 'DNE'
+
+        dates = []
+        for i in range(0, 7):
+            day = monday + datetime.timedelta(days=i)
+            dates.append(day.strftime('%b %d'))
+        values['week_dates'] = dates
+
+        return JsonResponse({
+            'msg': 'Success',
+            'json_data': str(values),
+            'returnJson': returnJson
+        })
+
+
+    date_tuple = dt.today().isocalendar()
+    WEEK = date_tuple[1] - 2
+    startdate = time.asctime(time.strptime(f'{date_tuple[0]} {WEEK} 0', '%Y %W %w'))
+    startdate = dt.strptime(startdate, '%a %b %d %H:%M:%S %Y')
+    dates = []
+    for i in range(1, 8):
+        day = startdate + datetime.timedelta(days=i)
+        dates.append(day.strftime('%b %d'))
+
+    context = {
+        'init_cats': ['Vacation', 'Project X', 'Lead App', 'Office', 'Break'],
+        'week': dates,
+    }
+
+    try:
+        context['cur_hours'] = list(WeeklyHours.objects.get(employee=request.user, week_of=startdate + datetime.timedelta(days=1)).week.all().values('name',
+            'mon_hours','tues_hours','wed_hours','thur_hours','fri_hours','sat_hours','sun_hours'))
+    except WeeklyHours.DoesNotExist:
+        context['cur_hours'] = [{'name':'Vacation'},{'name':'Meetings'},{'name':'Training'},{'name':'Break'}]
+
+    # Render the timesheet with any context we've passed in.
+    return render(request, 'timesheet.html', context)
+
+@login_required
+def reports(request):
+    if not is_in_group(request.user, "Administrators"):
+        return Http404
+
+    date = datetime.date.today()
+    cur_week = date - datetime.timedelta(date.weekday())
+
+    group_list = list(Group.objects.all().values_list('name', flat=True))
+    group_list.remove('Patient')
+
+    prev_weeks = list(WeeklyHours.objects.all().values_list('week_of', flat=True).distinct())
+    prev_weeks.remove(cur_week)
+    prev_weeks = reversed(prev_weeks)
+
+    start_week = date - datetime.timedelta(days=date.weekday(), weeks=0)
+    end_week = start_week + datetime.timedelta(days=7)
+    entries = Survey.objects.filter(order__in=Order.objects.filter(added_on__range=[start_week, end_week]))
+
+    context = {
+        'faculty': User.objects.filter(groups__name__in=group_list).distinct(),
+        'weeks': WeeklyHours.objects.all(),
+        'cur_week': cur_week,
+        'prev_weeks': prev_weeks,
+        'dates': [start_week, end_week],
+        'entries': entries
+    }
+    # Render the timesheet with any context we've passed in.
+    return render(request, 'reports.html', context)
+
+@login_required
+def download_excel(request, user_id, week_of):
+
+    if not is_in_group(request.user, "Administrators"):
+        raise Http404
+    
+    return generate_excel(user_id, week_of)
 
 @login_required
 def index(request):
@@ -61,6 +370,27 @@ def index(request):
     if see_all or is_in_group(request.user, "Radiologists"):
         # Pass into context all imaging complete orders for teams where logged in user is a radiologist.
         context['radiologist_orders'] = Order.objects.filter(level_id=3, team__radiologists=request.user)
+
+    if is_in_group(request.user, "Patient"):
+        # Grab patient from the database
+        patient_rec = Patient.objects.get(pk=request.user.user_obj.pk)
+        # Set up variables for our template and render it
+        context['user'] = request.user
+        context['patient_info'] = patient_rec
+        context['active_orders'] = patient_rec.orders.filter(level_id__lt=4)
+        context['complete_orders'] = patient_rec.orders.filter(level_id__gte=4).order_by('-added_on')
+        context['order_id'] = list(context['complete_orders'])[0].pk
+
+        new_form = SurveyForm(data=request.POST)
+        context['new_survey_form'] = new_form
+        # Determine if a survey was just submitted, and only allow the notification to show once
+        if 'just_submitted' in request.session:
+            if request.session['just_submitted'] >= 1:
+                del request.session['just_submitted']
+            elif request.session['just_submitted'] < 0:
+                request.session['just_submitted'] = 0
+            else:
+                request.session['just_submitted'] = request.session.get('just_submitted') + 1
 
     # Render the dashoboard with any context we've passed in.
     return render(request, 'index.html', context)
@@ -132,6 +462,8 @@ def order(request, order_id):
             # Assign POST data to selection form, check if it's valid, and save if so
             form = TeamSelectionForm(data=request.POST, instance=cur_order)
             if form.is_valid():
+                cur_order.receptionist_id = request.user.pk
+                cur_order.save()
                 form.save()
             else:
                 # Show errors
@@ -206,7 +538,7 @@ def order(request, order_id):
         cur_order.save()
 
         # Send an email notification to the correct user(s)
-        send_notification.now(order_id)
+        #send_notification.now(order_id)
 
     # Set up the variables for our template
     context = {
@@ -233,6 +565,10 @@ def order(request, order_id):
         # Prepare context for template if archived
         pass
 
+    # Prevent patients from viewing the orders of other patients
+    if is_in_group(request.user, ['Patient']) and cur_order.patient.pk != request.user.user_obj.pk:
+        return redirect('patient', request.user.user_obj.pk)
+
     # Define which user groups can see medical info, add to context
     medical_groups = ['Technicians', 'Radiologists', 'Physicians']
     context['show_medical'] = is_in_group(request.user, medical_groups)
@@ -248,6 +584,10 @@ def patient(request, pat_id=None):
 
     # Grab patient from the database
     patient_rec = Patient.objects.get(pk=pat_id)
+
+    # Prevent patients from viewing the staff version of the patient form
+    if is_in_group(request.user, ['Patient']):
+        return redirect('index')
 
     # Check if it is a post request. If so, build our form with the post data.
     if request.method == 'POST':
@@ -323,6 +663,10 @@ def schedule_order(request, order_id):
 def patient_lookup(request):
     """ Handles patient lookup and order creation """
 
+    # Prevent patients from viewing the staff version of the patient forms
+    if is_in_group(request.user, ['Patient']):
+        return redirect('index')
+
     # Grab a data object from our DateWidget
     dob = datetime.datetime.strptime(request.POST['birth_date'], '%m/%d/%Y').date()
 
@@ -363,7 +707,23 @@ def new_patient(request):
 
     # Check if form is valid. If so, assign doctor and save, the redir to a new order. Otherwise, show error.
     if new_form.is_valid():
-        new_patient = new_form.save()
+        new_patient = new_form.save(commit=False)
+        new_patient.set_password(new_form.cleaned_data['password'])
+
+        new_user = User.objects.create_user(
+            username=new_form.cleaned_data['email_info'],
+            email=new_form.cleaned_data['email_info'],
+            password=new_form.cleaned_data['password'])
+        
+        new_user.first_name = new_form.cleaned_data['first_name']
+        new_user.last_name = new_form.cleaned_data['last_name']
+        new_user.save()
+
+        new_patient.user = new_user
+        new_patient.save()
+
+        patient_group = Group.objects.get(name="Patient")
+        patient_group.user_set.add(new_patient.user)
 
         new_patient.doctor_id = request.user.pk
         new_patient.save()
@@ -383,6 +743,10 @@ def new_patient(request):
 @login_required
 def new_order(request, pat_id):
     """ Handles creation of a new order """
+
+    # Prevent patients from viewing the staff version of the patient form
+    if is_in_group(request.user, ['Patient']):
+        return redirect('index')
 
     # if not post request, redirect to 404
     if request.method == 'POST':
@@ -434,7 +798,7 @@ def remove_file(request, img_id):
 
 
 def public_order(request):
-    """ Handles dispplaying order based on secret key """
+    """ Handles displaying order based on secret key """
 
     # Get secret key from GET parameters
     key = request.GET.get('key')
@@ -460,3 +824,7 @@ def public_order(request):
 def show_message(request, headlines):
     """ Handles showing error messages """
     return render(request, 'message.html', headlines)
+
+@login_required
+def show_patient_profile(request):
+    return render(request, 'patients/home.html')

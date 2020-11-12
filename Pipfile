@@ -4,10 +4,29 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+xlsxwriter = "*"
 
 [packages]
-Django = "*"
-xamine-env = "*"
+django-crispy-forms = "*"
+django-agenda = "*"
+djangorestframework = "*"
+django-filter = "*"
+django-bootstrap-datepicker-plus = "*"
+django-intl-tel-input = "*"
+django-sendgrid-v5 = "*"
+django-background-tasks = "*"
+django-extensions = "*"
+sendgrid = "*"
+django-cleanup = "*"
+Markdown = "*"
+django = "*"
+requests = "*"
+xhtml2pdf = "*"
+xlsxwriter = "*"
+pandas = "*"
 
 [requires]
 python_version = "3.7"
+
+[pipenv]
+allow_prereleases = true

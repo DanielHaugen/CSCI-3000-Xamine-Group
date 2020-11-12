@@ -3,6 +3,11 @@
 import os
 import sys
 
+import django
+
+print('test')
+print(sys.executable)
+print(django.__version__)
 
 def main():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'xamineapp.settings')

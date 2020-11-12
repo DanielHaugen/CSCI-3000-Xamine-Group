@@ -1,0 +1,508 @@
+{% extends 'base/base.html' %}
+
+{% block header %}
+    {% load group_auth %}
+    <style>
+        
+        .orderlink { color: black; }
+
+        label {
+            font-weight: bold;
+        }
+
+        .time_container {
+            margin: 0 3rem;
+            padding: 1rem;
+        }
+
+        /* Chrome, Safari, Edge, Opera */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+        }
+
+        /* Firefox */
+        input[type=number] {
+        -moz-appearance: textfield;
+        }
+
+    </style>
+
+    {{ patient_lookup.media.css }}
+    <link href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" type="text/css" rel="stylesheet">
+{% endblock %}
+
+{% block main %}
+{% load replace_zero %}
+{% load replace_space %}
+{% load sum_row %}
+{% load sum_week %}
+<!-- Modal For Adding New Rows -->
+<div class="modal fade" id="rowModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Provide a new Category Name</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="addRowError" class="alert alert-danger" role="alert" style="display: none;">
+                    <strong>Invalid Input</strong>
+                    <p></p>
+                </div>
+                <div class="mb-4">
+                    <label>New Column Name</label><br>
+                    <input id="newRowName" name="newRow" class="form-control" pattern='[a-zA-Z0-9 ]+' maxlength="30"/>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button id="submitRowName" type="button" class="btn btn-primary">Submit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal For Confirming Copying Last Week's Timehseet -->
+<div class="modal fade" id="copyModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Confirm Copying Timesheet</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-4">
+                    <p>
+                        Copying last week's timesheet will override any current changes to this week's timesheet.
+                        <br><br>
+                        Would you like to continue?
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button id="confirmCopyBtn" type="button" class="btn btn-primary">Continue</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="time_container">
+    <div id="row app">
+        <table id="time_table" class="table table-condensed">
+            <thead>
+            <tr style="border: none">
+                <th style="border: none" colspan="6">
+                    <h2>Timesheet</h2>
+                </th>
+                <th class="text-right" style="border: none" colspan="2">
+                    <h3 id="weeks_ago">Current Week</h3>
+                </th>
+                <th class="text-right align-middle" style="border: none">
+                    <a id="left_week" href="#">
+                        <i class="fas fa-fw fa-caret-square-left fa-2x"></i>
+                    </a>
+                </th>
+                <th class="text-left align-middle" style="border: none">
+                    <a id="right_week" href="#">
+                        <i class="fas fa-fw fa-caret-square-right fa-2x"></i>
+                    </a>
+                </th>
+            </tr>
+            <tr class="thead-light">
+                <th class="text-center align-middle" style="width:15%">Projects</th>
+                <th id="mon_date" class="text-center align-middle">Mon, {{ week.0 }}</th>
+                <th id="tues_date" class="text-center align-middle">Tues, {{ week.1 }}</th>
+                <th id="wed_date" class="text-center align-middle">Wed, {{ week.2 }}</th>
+                <th id="thur_date" class="text-center align-middle">Thur, {{ week.3 }}</th>
+                <th id="fri_date" class="text-center align-middle">Fri, {{ week.4 }}</th>
+                <th id="sat_date" class="text-center align-middle">Sat, {{ week.5 }}</th>
+                <th id="sun_date" class="text-center align-middle">Sun, {{ week.6 }}</th>
+                <th class="text-center align-middle">Total</th>
+                <th class="text-center align-middle"></th>
+            </tr>
+            </thead>
+            <tbody>
+                {% for cat in cur_hours %}
+                    <tr class="time_cat_row">
+                        <td class="pl-4 align-middle">
+                            {{ cat.name }}
+                        </td>
+                        <td>
+                            <input name="{{ cat.name|replace_space }}_0" class="{{ cat.name|replace_space }} time_field form-control" value="{{cat.mon_hours|replace_zero}}" pattern='\d{0,2}(?:[.,]\d{1,2})?' oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');" maxlength="5"/>
+                        </td>
+                        <td>
+                            <input name="{{ cat.name|replace_space }}_1" class="{{ cat.name|replace_space }} time_field form-control" value="{{cat.tues_hours|replace_zero}}" pattern='\d{0,2}(?:[.,]\d{1,2})?' oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');" maxlength="5"/>
+                        </td>
+                        <td>
+                            <input name="{{ cat.name|replace_space }}_2" class="{{ cat.name|replace_space }} time_field form-control" value="{{cat.wed_hours|replace_zero}}" pattern='\d{0,2}(?:[.,]\d{1,2})?' oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');" maxlength="5"/>
+                        </td>
+                        <td>
+                            <input name="{{ cat.name|replace_space }}_3" class="{{ cat.name|replace_space }} time_field form-control" value="{{cat.thur_hours|replace_zero}}" pattern='\d{0,2}(?:[.,]\d{1,2})?' oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');" maxlength="5"/>
+                        </td>
+                        <td>
+                            <input name="{{ cat.name|replace_space }}_4" class="{{ cat.name|replace_space }} time_field form-control" value="{{cat.fri_hours|replace_zero}}" pattern='\d{0,2}(?:[.,]\d{1,2})?' oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');" maxlength="5"/>
+                        </td>
+                        <td>
+                            <input name="{{ cat.name|replace_space }}_5" class="{{ cat.name|replace_space }} time_field form-control" value="{{cat.sat_hours|replace_zero}}" pattern='\d{0,2}(?:[.,]\d{1,2})?' oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');" maxlength="5"/>
+                        </td>
+                        <td>
+                            <input name="{{ cat.name|replace_space }}_6" class="{{ cat.name|replace_space }} time_field form-control" value="{{cat.sun_hours|replace_zero}}" pattern='\d{0,2}(?:[.,]\d{1,2})?' oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');" maxlength="5"/>
+                        </td>
+                        <td id="{{ cat.name|replace_space }}_sum"  class="{{ cat.name|replace_space }} text-center align-middle row_sum">
+                            {{ cat|sum_row }}
+                        </td>
+                        <td id="{{cat.name|replace_space}}_rem"  class="text-center">
+                            <button type="button" class="close align-middle" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </td>
+                    </tr>
+                {% endfor %}
+                <tr class="thead-light">
+                    <td class="text-center">
+                        <button id="add_btn" type="button" class="btn btn-outline-primary time_btn">
+                            <i class="fas fa-fw fa-plus"></i> Add New Row
+                        </button>
+                    </td>
+                    <td colspan="2">
+                        <button type="button" id="copy_btn" class="btn btn-outline-primary time_btn">
+                            <i class="fas fa-fw fa-copy"></i> Copy Previous Week
+                        </button>
+                    </td>
+                    <td></td>
+                    <td></td>
+                    <td class="text-right" colspan="3">
+                        <button type="button" id="save_btn" class="btn btn-outline-primary time_btn">
+                            <i class="fas fa-fw fa-save"></i> Submit
+                        </button>
+                    </td>
+                    <td class="align-middle">
+                    <h5 class="text-right">Total</h5>
+                    </td>
+                    <td class="align-middle">
+                        <h5 class="text-right total">{% sum_week request.user %}</h5>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <p id="test"></p>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block afterscript %}
+
+    {{ patient_lookup.media.js}}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap-notify@3.1.3/bootstrap-notify.min.js"></script>
+    <script>
+        
+        $(document).on('click', '#save_btn', function() {
+            createJSON();
+        });
+
+        $(document).on('click', '#copy_btn', function() {
+            $('#copyModal').modal('show');
+        });
+
+        $(document).on('click', '#add_btn', function() {
+            $('#rowModal').modal('show');
+            $('#addRowError').hide();
+            $('#rowModal input#newRowName').val('');
+        });
+
+        $('#rowModal').on('shown.bs.modal', function () {
+            $("#rowModal input#newRowName").focus();
+        });
+
+        $(document).on('click', '#submitRowName', function() {
+            addRow();
+        });
+
+        $(document).keypress(function(e){
+            if ($('#rowModal').is(':visible') && e.keyCode == 13) {
+                addRow();
+            }
+        });
+
+        $("#time_table").on("click", "button.close", function() {
+            $(this).closest("tr").remove();
+            updateTotal();
+        });
+
+        // Prevent submitting timesheet by clicking enter
+        $('#time_field').bind('keypress keydown keyup', function(e){
+            if(e.keyCode == 13) { e.preventDefault(); }
+        });
+
+        function addRow() {
+            current_rows = []
+            $("#time_table tr td:first-child").each(function(){
+                current_rows.push($(this).text().replace(/(\w+)(\s+)(?=\w+)/, "$1-s-").replace(/\s/g, ''));
+            });
+
+            rowValue = $('#newRowName').val();
+            new_row_cat = rowValue.replace(/(\w+)(\s+)(?=\w+)/, "$1-s-").replace(/\s/g, '');
+            if(rowValue == ""){
+                $('#addRowError').show();
+                $('#addRowError p').text('Category name cannot be empty');
+            } else if(current_rows.includes(new_row_cat)) {
+                $('#addRowError').show();
+                $('#addRowError p').text('Category name is already being used');
+            } else {
+                $('#addRowError').hide();
+                // Create Row for new Category
+                add_row_str = '<tr class="time_cat_row"><td class="pl-4 align-middle">'+rowValue+'</td>';
+                for (var i = 0; i < 7; i++) { 
+                    add_row_str += `<td><input name="${new_row_cat}_${i}" class="${new_row_cat} time_field form-control" pattern='\\d{0,2}(?:[.,]\\d{1,2})?' oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\\..*)\\./g, '$1');" maxlength="5"/></td>`;
+                }
+                add_row_str += `<td id="${new_row_cat}_sum"  class="${new_row_cat} text-center align-middle row_sum">0.00</td>`;
+                add_row_str += `<td id="${new_row_cat}_rem"  class="text-center"><button type="button" class="close align-middle" aria-label="Close"><span aria-hidden="true">&times;</span></button></td>`;
+
+                if(current_rows.length >= 2) {
+                    $('#time_table tbody tr:nth-last-child(2)').after(add_row_str);
+                } else {
+                    $('#time_table tbody tr:last-child').before(add_row_str);
+                }
+
+                $('#rowModal').modal('hide');
+            }
+        }
+
+        $(document).on("change", ".time_field", function() {
+            // Prevent > 24 and represent as decimal with 2 decimal places
+            if(parseFloat(this.value) > 24) {
+                $(this).val(parseFloat("24"));
+            }
+            if($(this).val() != ""){
+                $(this).val(parseFloat($(this).val()).toFixed(2));
+            }
+            
+            category = $(this).attr('name').split('_')[0];
+            updateRowTotal(category);
+            updateTotal();
+        });
+
+        function updateRowTotal(category){
+            var row_sum = 0;
+
+            $("."+category+".time_field").each(function(){
+                row_sum += +$(this).val();
+            });
+            
+            $("[id='"+category+"_sum']").text(row_sum.toFixed(2));
+        }
+
+        function updateTotal(){
+            var sum = 0;
+            $(".time_field").each(function(){
+                sum += +$(this).val();
+            });
+            $(".total").text(sum.toFixed(2));
+        }
+
+        dictionary = {}
+        function createJSON() {
+            dictionary = {}
+            $(".time_field").each(function() {
+                var id = $(this).attr("name").split('_');
+                var value = $(this).val();
+
+                if(value == "") {
+                    value = "0";
+                }
+                id[0] = id[0].replace(/(\w+)(-s-)(?=\w+)/, "$1 ")
+                if (!(id[0] in dictionary)) {
+                    dictionary[id[0]] = []
+                }
+                dictionary[id[0]].splice(id[1], 0, value);
+            });
+            for (var property in dictionary) {
+                dictionary[property] = dictionary[property].map(Number)
+                if (dictionary[property].every(item => item === 0)) {
+                    delete dictionary[property]
+                }
+            }
+            console.log(dictionary);
+            submitData();
+        }
+
+        function submitData() {
+            $.ajax({
+                type: 'POST',
+                url: '{% url "timesheet" %}',
+                data: {time: JSON.stringify(dictionary), csrfmiddlewaretoken: '{{ csrf_token }}',},
+                dataType: 'json',
+                success: function (data) {
+                    if (data.msg === 'Success') {
+                        // alert('Good to go ' + data.json_data);
+                        // $("p#test").text(JSON.stringify(data.json_data));
+                        $.notify({
+                            title: '<strong>Timesheet Submitted!</strong>',
+                            message: 'Thank you for submitting your timesheet for the week, your hours have been recorded.'
+                        },{
+                            type: 'success', 
+                            offset: { x: 50, y: 60 }
+                        });
+                    } else {
+                        $.notify({
+                            title: `<strong>Error</strong>`,
+                            message: `${data.error_msg}`
+                        },{
+                            type: 'danger', 
+                            offset: { x: 50, y: 60 }
+                        });
+                    }
+                }
+            })
+        }
+        
+        $(document).on('click', '#confirmCopyBtn', function() {
+            $.ajax({
+                type: 'POST',
+                url: '{% url "timesheet" %}',
+                data: {copy: 1, csrfmiddlewaretoken: '{{ csrf_token }}',},
+                dataType: 'json',
+                success: function (data) {
+                    if (data.msg === 'Success') {
+                        // alert('Good to go ' + data.json_data);
+                        var tmp_str = ''
+                        replaceRows(data.returnJson)
+                    } else {
+                        $.notify({
+                            title: `<strong>${data.msg}</strong>`,
+                            message: `${data.error_msg}`
+                        },{
+                            type: 'danger', 
+                            offset: { x: 50, y: 60 }
+                        });
+                    }
+                }
+            })
+
+            $('#copyModal').modal('hide');
+        });
+
+        function replaceRows(newRowsJsonList) {
+            // Delete the original Rows
+            $("#time_table tr.time_cat_row").remove();
+
+            for(var obj in newRowsJsonList) {
+                tmp_obj = JSON.parse(JSON.stringify(newRowsJsonList[obj]))
+                
+                hour_counts = [tmp_obj.mon_hours, tmp_obj.tues_hours, tmp_obj.wed_hours, tmp_obj.thur_hours, tmp_obj.fri_hours, tmp_obj.sat_hours, tmp_obj.sun_hours]
+
+                new_row_cat = tmp_obj.name.replace(/(\w+)(\s+)(?=\w+)/, "$1-s-").replace(/\s/g, '');
+                
+                // Add the Rows
+                add_row_str = '<tr class="time_cat_row"><td class="pl-4 align-middle">'+tmp_obj.name+'</td>';
+                for (var i = 0; i < hour_counts.length; i++) {
+                    if(hour_counts[i] == "0.00"){
+                        hour_counts[i] = ""
+                    }
+
+                    add_row_str += `<td><input name="${new_row_cat}_${i}" class="${new_row_cat} time_field form-control" value="${hour_counts[i]}" pattern='\\d{0,2}(?:[.,]\\d{1,2})?' oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\\..*)\\./g, '$1');" maxlength="5"/></td>`;
+                }
+                add_row_str += `<td id="${new_row_cat}_sum"  class="${new_row_cat} text-center align-middle row_sum">0.00</td>`;
+                if(week_offset == 0) {
+                    add_row_str += `<td id="${new_row_cat}_rem"  class="text-center"><button type="button" class="close align-middle" aria-label="Close"><span aria-hidden="true">&times;</span></button></td>`;
+                }
+                add_row_str+='</td>'
+                if($("#time_table tr.time_cat_row").length >= 2) {
+                    $('#time_table tbody tr:nth-last-child(2)').after(add_row_str);
+                } else {
+                    $('#time_table tbody tr:last-child').before(add_row_str);
+                }
+                updateRowTotal(new_row_cat);
+            }
+            updateTotal()
+        }
+
+        var week_offset = 0
+        $(document).on('click', '#left_week', function() {
+            week_offset -= 1;
+            setWeekLabel();
+        });
+        $(document).on('click', '#right_week', function() {
+            week_offset += 1;
+            setWeekLabel();
+        });
+
+        function setWeekLabel() {
+            if (week_offset >= 0){
+                week_offset = 0
+                $("#weeks_ago").text('Current Week');
+                $(".time_btn").show();
+            } else {
+                $(".time_btn").hide();
+                if (week_offset == -1) {
+                    $("#weeks_ago").text(Math.abs(week_offset) + ' Week Ago');    
+                } else {
+                    $("#weeks_ago").text(Math.abs(week_offset) + ' Weeks Ago');
+                }
+            }
+            
+            $.ajax({
+                type: 'POST',
+                url: '{% url "timesheet" %}',
+                data: {offset: week_offset, csrfmiddlewaretoken: '{{ csrf_token }}',},
+                dataType: 'json',
+                success: function (data) {
+                    if (data.msg === 'Success') {
+                        // $("p#test").text(JSON.stringify(data.returnJson));
+                        var date_labels = JSON.parse(data.json_data.replace(/'/g, '"'))['week_dates'];
+                        $('#mon_date').text(`Mon, ${date_labels[0]}`);
+                        $('#tues_date').text(`Tues, ${date_labels[1]}`);
+                        $('#wed_date').text(`Wed, ${date_labels[2]}`);
+                        $('#thur_date').text(`Thur, ${date_labels[3]}`);
+                        $('#fri_date').text(`Fri, ${date_labels[4]}`);
+                        $('#sat_date').text(`Sat, ${date_labels[5]}`);
+                        $('#sun_date').text(`Sun, ${date_labels[6]}`);
+
+                        if(data.returnJson[0] != "DNE") {
+                            // Record exists for this week, load into timesheet
+                            replaceRows(data.returnJson)
+                        } else {
+                            if(week_offset != 0) {
+                                // Record not found for this week, delete the presented rows and show message
+                                $("#time_table tr.time_cat_row").remove();
+                                $('#time_table tbody tr:last-child').before('<tr class="time_cat_row"><td class="text-center" colspan="10">No values recorded for this week.</td></tr>');
+                            } else {
+                                var mylist = JSON.parse("{{init_cats|safe}}".replace(/'/g, '"'));
+                                outerList = []
+                                for(i = 0; i < mylist.length; i++){
+                                    jsonDict = {}
+                                    jsonDict['name'] = mylist[i];
+                                    jsonDict['mon_hours'] = "0.00";
+                                    jsonDict['tues_hours'] = "0.00";
+                                    jsonDict['wed_hours'] = "0.00";
+                                    jsonDict['thur_hours'] = "0.00";
+                                    jsonDict['fri_hours'] = "0.00";
+                                    jsonDict['sat_hours'] = "0.00";
+                                    jsonDict['sun_hours'] = "0.00";
+                                    outerList.push(jsonDict)
+                                };
+                                replaceRows(outerList)
+                            }
+                        }
+
+                        // Disable editting of the input fields
+                        if(week_offset == 0) {
+                            $("input.time_field.form-control").prop('disabled', false);
+                        } else {
+                            $("input.time_field.form-control").prop('disabled', true);
+                        }
+                    }
+                }
+            })
+        }
+
+    </script>
+{% endblock %}

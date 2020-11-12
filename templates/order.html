@@ -155,7 +155,7 @@
                             </div>
                             <div class="col-md-8 col-12 text-area-wrap">
                                 <span class="font-weight-bold">Notes:</span><br>
-                                {{ cur_order.notes }}
+                                {{ cur_order.patient.notes }}
                             </div>
                         </div>
                     {% endif %}
@@ -404,12 +404,24 @@
                         {% endif %}
                     </div>
                 </div>
-                {% if cur_order.level_id > 3 and request.user|has_group:'Physicians' and request.user == cur_order.patient.doctor %}
+                {% if cur_order.level_id > 3 and request.user|has_group:'Physicians' and request.user == cur_order.patient.doctor or request.user|has_group:"Administrators" %}
                     <div class="row mt-3">
                         <div class="col-12">
                             <button id="patient_send" type="button" onclick="sendPatientEmail()" class="btn btn-outline-primary">
-                                Send Report to Patient
+                                <i class="fas fa-fw fa-envelope"></i> Send Report to Patient
                             </button>
+                        </div>
+                    </div>
+                {% endif %}
+                {% if cur_order.level_id > 3 and request.user|has_group:'Patient' and request.user.user_obj == cur_order.patient %}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <a id="order_download" class="btn btn-primary mr-4" href="{% url 'pdf_download' order_id=cur_order.id %}" role="button" target="_blank">
+                                <i class="fas fa-fw fa-download"></i> Download PDF Report
+                            </a>
+                            <a id="order_view" class="btn btn-success" href="{% url 'pdf_view' order_id=cur_order.id %}" role="button" target="_blank">
+                                <i class="far fa-fw fa-file-pdf"></i> View PDF Report
+                            </a>
                         </div>
                     </div>
                 {% endif %}
@@ -451,8 +463,10 @@
             $('#edit_order_info').collapse('hide');
             document.getElementById('edit_order_form').reset()
         }
-
-        {% if cur_order.level_id >= 4 and request.user|has_group:"Physicians" %}
+    </script>
+    {# This section below was modified to remove errors #}
+    {% if cur_order.level_id >= 4 and request.user|has_group:"Physicians" or request.user|has_group:"Administrators" %}
+        <script>
             function sendPatientEmail () {
                 fetch("{% url 'patient_view' order_id=cur_order.id %}")
                     .then(res => res.json())
@@ -471,7 +485,8 @@
                         }
                     })
             }
-        {% endif %}
+        </script>
+    {% endif %}
 
     </script>
 {% endblock %}
