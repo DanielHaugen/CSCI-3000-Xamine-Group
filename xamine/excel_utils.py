@@ -7,6 +7,7 @@ import pandas as pd
 import datetime
 
 def generate_excel(user_id, week_of):
+    """ Generate Excel report for a specific user and week """
     try:
         cur_user = User.objects.get(id=user_id)
     except Order.DoesNotExist:

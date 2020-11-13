@@ -153,6 +153,7 @@ DEFAULT_FROM_EMAIL = 'xamine.team3@gmail.com'
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.sendgrid.net'
 EMAIL_HOST_USER = 'apikey'
+# Replace the string below with the API key generated from Sendgrid
 EMAIL_HOST_PASSWORD = '[REDACTED]'
 EMAIL_PPORT = 587
 EMAIL_USE_TLS = True
