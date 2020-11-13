@@ -24,13 +24,12 @@ urlpatterns = [
     path('image/<int:img_id>/remove', views.remove_file, name='remove_image'),  # Remove specified image
 
     path('patient-login/', views.loginPatient, name='patient_login'),  # lookup patients by DOB
-    path('profile/', views.show_patient_profile, name='patient_profile'),  # Show profile of loggedin patient
     path('survey/<int:order_id>/', views.order_survey, name='order_survey'),  # Create survey for visit
     path('survey/<int:order_id>/save', views.submit_survey, name='submit_survey'),  # Submit survey of visit
 
     path('timesheet/', views.timesheet, name='timesheet'),  # Timesheet for logging employee hours
-    path('reports/', views.reports, name='reports'),  # Timesheet for logging employee hours
-    path('reports/<int:user_id>/download/<str:week_of>/', views.download_excel, name='download_report'),  # Submit survey of visit
+    path('reports/', views.reports, name='reports'),  # Dashboard page for previewing Productivity Reports
+    path('reports/<int:user_id>/download/<str:week_of>/', views.download_excel, name='download_report'),  # Download Productivity Report of user
 ]
 
 # Ensure the images and thumbnails can be loaded during development

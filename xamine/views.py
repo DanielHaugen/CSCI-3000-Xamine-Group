@@ -24,6 +24,7 @@ from xamine.tasks import send_notification
 from xamine.excel_utils import generate_excel
 
 def loginPatient(request):
+    """ Controls the Patient Login Portal """
     # Logging into the patient portal page
     if request.user.is_authenticated:
         return HttpResponseRedirect('/')
@@ -34,6 +35,7 @@ def loginPatient(request):
 
         captcha_token = request.POST.get("g-recaptcha-response")
         captcha_url = "https://www.google.com/recaptcha/api/siteverify"
+        # Replace the string below with the secret key generated from the Google Captcha page
         captcha_secret = "[REDACTED]"
 
         captcha_data = {"secret":captcha_secret, "response":captcha_token}
@@ -64,7 +66,7 @@ def loginPatient(request):
 
 @login_required
 def order_survey(request, order_id):
-
+    """ Construct basis for Patient Survey """
     # if post request, redirect to 404
     if request.method == 'POST':
         raise Http404
@@ -132,6 +134,7 @@ def submit_survey(request, order_id):
         return render(request, 'index.html', context)
 
 def render_to_pdf(request, order_id):
+    """ Generate a PDF for the provided Order """
     # Attempt to grab order via order_id from url. 404 if not found.
     try:
         cur_order = Order.objects.get(pk=order_id)
@@ -165,6 +168,8 @@ def render_to_pdf(request, order_id):
 #Opens up page as PDF
 @login_required
 def view_pdf(request, order_id):
+    """ View the generated PDF in a new tab """
+
     # Attempt to grab order via order_id from url. 404 if not found.
     try:
         cur_order = Order.objects.get(pk=order_id)
@@ -177,6 +182,8 @@ def view_pdf(request, order_id):
 #Automaticly downloads to PDF file
 @login_required
 def download_pdf(request, order_id):
+    """ Download the generated PDF as an attachment """
+
     # Attempt to grab order via order_id from url. 404 if not found.
     try:
         cur_order = Order.objects.get(pk=order_id)
@@ -194,6 +201,8 @@ def download_pdf(request, order_id):
 
 @login_required
 def timesheet(request):
+    """ Backend control of the Employee Timesheet """
+
     # Prevent patients from accessing timesheet application
     if is_in_group(request.user, "Patient"):
         return Http404
@@ -286,6 +295,7 @@ def timesheet(request):
 
 @login_required
 def reports(request):
+    """ Determines Context for the Employee Productivity Reports page """
     if not is_in_group(request.user, "Administrators"):
         return Http404
 
@@ -318,7 +328,8 @@ def reports(request):
 
 @login_required
 def download_excel(request, user_id, week_of):
-
+    """ Download the generated Productivity Report """
+    # Ensure user request comes from an admin
     if not is_in_group(request.user, "Administrators"):
         raise Http404
     
@@ -826,7 +837,3 @@ def public_order(request):
 def show_message(request, headlines):
     """ Handles showing error messages """
     return render(request, 'message.html', headlines)
-
-@login_required
-def show_patient_profile(request):
-    return render(request, 'patients/home.html')
