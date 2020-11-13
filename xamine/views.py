@@ -293,10 +293,12 @@ def reports(request):
     cur_week = date - datetime.timedelta(date.weekday())
 
     group_list = list(Group.objects.all().values_list('name', flat=True))
-    group_list.remove('Patient')
+    if 'Patient' in group_list:
+        group_list.remove('Patient')
 
     prev_weeks = list(WeeklyHours.objects.all().values_list('week_of', flat=True).distinct())
-    prev_weeks.remove(cur_week)
+    if cur_week in prev_weeks:
+        prev_weeks.remove(cur_week)
     prev_weeks = reversed(prev_weeks)
 
     start_week = date - datetime.timedelta(days=date.weekday(), weeks=0)
