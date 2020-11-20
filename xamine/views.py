@@ -160,7 +160,13 @@ def render_to_pdf(request, order_id):
     template = get_template('pdf_temp.html')
     html  = template.render(context)
     result = BytesIO()
-    pdf = pisa.pisaDocument(BytesIO(html.encode("ISO-8859-1")), result)
+    
+    # Free PythonAnywhere accounts do not have access to this type of file download...
+    try:
+        pdf = pisa.pisaDocument(BytesIO(html.encode("ISO-8859-1")), result)
+    except:
+        return None
+    
     if not pdf.err:
         return HttpResponse(result.getvalue(), content_type='application/pdf')
     return None
