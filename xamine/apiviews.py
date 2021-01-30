@@ -44,13 +44,13 @@ def patient_email(request, order_id):
 
         if AppSetting.get_setting('EMAIL_TOGGLE') == 'True':
             # Send patient our email
-            from_email = 'xamine-team3@daniel-haugen.com'
+            from_email = '[REDACTED]'
             subject = 'Xamine RIS - Records Update'
             patient_dict = {
                 'first_name': cur_order.patient.first_name,
                 'url': url
             }
-            cc_list = ['dlhaugen1039@gmail.com']
+            cc_list = ['[REDACTED]']
             html_message = render_to_string(
                 template_name = 'mail_templates/email_message.html',
                 context = patient_dict
@@ -61,7 +61,7 @@ def patient_email(request, order_id):
                 msg.send()
             except BadHeaderError:
                 return HttpResponse('Invalid header found.')
-            #send_email([to_email], 'xamineinc@gmail.com', 'RIS Report is Ready', html_content)
+            #send_email([to_email], '[REDACTED]', 'RIS Report is Ready', html_content)
             message = 'Email Sent!'
         else:
             message = 'Link created!'
